@@ -1,17 +1,14 @@
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.Rectangle;
 import java.awt.Image;
 import java.awt.Point;
-
+import java.awt.Rectangle;
+import java.io.File;
+import java.util.Random;
+import javax.imageio.ImageIO;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
-
-import java.io.File;
-import javax.imageio.ImageIO;
-
-import java.util.Random;
 
 /**
  * A Game board on which to place and move players.
@@ -61,6 +58,9 @@ public class GameGUI extends JComponent
 
   // game frame
   private JFrame frame;
+
+  // Add a score field at the top with other fields
+  private int score = 0;
 
   /**
    * Constructor for the GameGUI class.
@@ -134,60 +134,75 @@ public class GameGUI extends JComponent
    */
   public int movePlayer(int incrx, int incry)
   {
-      int newX = x + incrx;
-      int newY = y + incry;
-      
-      // increment regardless of whether player really moves
-      playerSteps++;
+    int newX = x + incrx;
+    int newY = y + incry;
+    
+    playerSteps++;
 
-      // check if off grid horizontally and vertically
-      if ( (newX < 0 || newX > WIDTH-SPACE_SIZE) || (newY < 0 || newY > HEIGHT-SPACE_SIZE) )
+    if ( (newX < 0 || newX > WIDTH-SPACE_SIZE) || (newY < 0 || newY > HEIGHT-SPACE_SIZE) )
+    {
+      System.out.println ("OFF THE GRID!");
+      score -= offGridVal;
+      updateScore();
+      return -offGridVal;
+    }
+
+    for (Rectangle r: walls)
+    {
+      int startX =  (int)r.getX();
+      int endX  =  (int)r.getX() + (int)r.getWidth();
+      int startY =  (int)r.getY();
+      int endY = (int) r.getY() + (int)r.getHeight();
+
+      if ((incrx > 0) && (x <= startX) && (startX <= newX) && (y >= startY) && (y <= endY))
       {
-        System.out.println ("OFF THE GRID!");
-        return -offGridVal;
+        System.out.println("A WALL IS IN THE WAY");
+        score -= hitWallVal;
+        updateScore();
+        return -hitWallVal;
       }
-
-      // determine if a wall is in the way
-      for (Rectangle r: walls)
+      else if ((incrx < 0) && (x >= startX) && (startX >= newX) && (y >= startY) && (y <= endY))
       {
-        // this rect. location
-        int startX =  (int)r.getX();
-        int endX  =  (int)r.getX() + (int)r.getWidth();
-        int startY =  (int)r.getY();
-        int endY = (int) r.getY() + (int)r.getHeight();
-
-        // (Note: the following if statements could be written as huge conditional but who wants to look at that!?)
-        // moving RIGHT, check to the right
-        if ((incrx > 0) && (x <= startX) && (startX <= newX) && (y >= startY) && (y <= endY))
-        {
-          System.out.println("A WALL IS IN THE WAY");
-          return -hitWallVal;
-        }
-        // moving LEFT, check to the left
-        else if ((incrx < 0) && (x >= startX) && (startX >= newX) && (y >= startY) && (y <= endY))
-        {
-          System.out.println("A WALL IS IN THE WAY");
-          return -hitWallVal;
-        }
-        // moving DOWN check below
-        else if ((incry > 0) && (y <= startY && startY <= newY && x >= startX && x <= endX))
-        {
-          System.out.println("A WALL IS IN THE WAY");
-          return -hitWallVal;
-        }
-        // moving UP check above
-        else if ((incry < 0) && (y >= startY) && (startY >= newY) && (x >= startX) && (x <= endX))
-        {
-          System.out.println("A WALL IS IN THE WAY");
-          return -hitWallVal;
-        }     
+        System.out.println("A WALL IS IN THE WAY");
+        score -= hitWallVal;
+        updateScore();
+        return -hitWallVal;
       }
+      else if ((incry > 0) && (y <= startY && startY <= newY && x >= startX && x <= endX))
+      {
+        System.out.println("A WALL IS IN THE WAY");
+        score -= hitWallVal;
+        updateScore();
+        return -hitWallVal;
+      }
+      else if ((incry < 0) && (y >= startY) && (startY >= newY) && (x >= startX) && (x <= endX))
+      {
+        System.out.println("A WALL IS IN THE WAY");
+        score -= hitWallVal;
+        updateScore();
+        return -hitWallVal;
+      }     
+    }
 
-      // all is well, move player
-      x += incrx;
-      y += incry;
-      repaint();   
-      return 0;   
+    x += incrx;
+    y += incry;
+    updateScore();
+
+    // Check if player is on a coin after moving, and pick it up automatically
+    double px = x;
+    double py = y;
+    for (Rectangle p : prizes) {
+      if (p.getWidth() > 0 && p.contains(px, py)) {
+        System.out.println("YOU PICKED UP A PRIZE!");
+        p.setSize(0,0);
+        score += prizeVal;
+        updateScore();
+        // Only one coin can be at a location, so break after picking up
+        break;
+      }
+    }
+
+    return 0;   
   }
 
   /**
@@ -239,23 +254,23 @@ public class GameGUI extends JComponent
     double px = playerLoc.getX() + newx;
     double py = playerLoc.getY() + newy;
 
-    // check all traps, some of which may be already sprung
     for (Rectangle r: traps)
     {
-      // DEBUG: System.out.println("trapx:" + r.getX() + " trapy:" + r.getY() + "\npx: " + px + " py:" + py);
       if (r.contains(px, py))
       {
-        // zero size traps indicate it has been sprung, cannot spring again, so ignore
         if (r.getWidth() > 0)
         {
           r.setSize(0,0);
           System.out.println("TRAP IS SPRUNG!");
+          score += trapVal;
+          updateScore();
           return trapVal;
         }
       }
     }
-    // no trap here, penalty
     System.out.println("THERE IS NO TRAP HERE TO SPRING");
+    score -= trapVal;
+    updateScore();
     return -trapVal;
   }
 
@@ -277,11 +292,14 @@ public class GameGUI extends JComponent
       {
         System.out.println("YOU PICKED UP A PRIZE!");
         p.setSize(0,0);
-        repaint();
+        score += prizeVal;
+        updateScore();
         return prizeVal;
       }
     }
     System.out.println("OOPS, NO PRIZE HERE");
+    score -= prizeVal;
+    updateScore();
     return -prizeVal;  
   }
 
@@ -392,12 +410,11 @@ public class GameGUI extends JComponent
     // add prizes
     for (Rectangle p : prizes)
     {
-      // picked up prizes are 0 size so don't render
       if (p.getWidth() > 0) 
       {
-      int px = (int)p.getX();
-      int py = (int)p.getY();
-      g.drawImage(prizeImage, px, py, null);
+        int px = (int)p.getX();
+        int py = (int)p.getY();
+        g.drawImage(prizeImage, px, py, null);
       }
     }
 
@@ -411,6 +428,16 @@ public class GameGUI extends JComponent
     // draw player, saving its location
     g.drawImage(player, x, y, 40,40, null);
     playerLoc.setLocation(x,y);
+
+    // Draw the score in the top right corner in red
+    String scoreText = "Score: " + score;
+    g.setColor(Color.RED);
+    g.setFont(g.getFont().deriveFont(18f));
+    int textWidth = g.getFontMetrics().stringWidth(scoreText);
+    int padding = 20;
+    int xPos = getWidth() - textWidth - padding;
+    int yPos = padding + g.getFontMetrics().getAscent();
+    g.drawString(scoreText, xPos, yPos);
   }
 
   /*------------------- private methods -------------------*/
@@ -479,6 +506,10 @@ public class GameGUI extends JComponent
        }
        walls[numWalls] = r;
      }
+  }
+
+  private void updateScore() {
+    repaint(); // This will trigger paintComponent to redraw the score
   }
 
   /**
