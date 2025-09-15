@@ -1,14 +1,20 @@
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.Image;
 import java.awt.Point;
-import java.awt.Rectangle;
-import java.io.File;
-import java.util.Random;
-import javax.imageio.ImageIO;
+
 import javax.swing.JComponent;
 import javax.swing.JFrame;
+
+import java.io.File;
+import javax.imageio.ImageIO;
+
+import java.util.Random;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.util.Scanner;
 
 /**
  * A Game board on which to place and move players.
@@ -59,9 +65,6 @@ public class GameGUI extends JComponent
   // game frame
   private JFrame frame;
 
-  // Add a score field at the top with other fields
-  private int score = 0;
-
   /**
    * Constructor for the GameGUI class.
    * Creates a frame with a background image and a player that will move around the board.
@@ -102,12 +105,32 @@ public class GameGUI extends JComponent
     totalWalls = 20;
     totalPrizes = 3;
     totalTraps = 5;
+
+    // Add key listener for arrow keys
+    frame.addKeyListener(new KeyAdapter() {
+      @Override
+      public void keyPressed(KeyEvent e) {
+        int key = e.getKeyCode();
+        if (key == KeyEvent.VK_RIGHT) {
+          movePlayer(SPACE_SIZE, 0);
+        } else if (key == KeyEvent.VK_LEFT) {
+          movePlayer(-SPACE_SIZE, 0);
+        } else if (key == KeyEvent.VK_DOWN) {
+          movePlayer(0, SPACE_SIZE);
+        } else if (key == KeyEvent.VK_UP) {
+          movePlayer(0, -SPACE_SIZE);
+        }
+      }
+    });
   }
 
  /**
   * After a GameGUI object is created, this method adds the walls, prizes, and traps to the gameboard.
   * Note that traps and prizes may occupy the same location.
   */
+ 
+
+
   public void createBoard()
   {
     traps = new Rectangle[totalTraps];
@@ -137,16 +160,17 @@ public class GameGUI extends JComponent
     int newX = x + incrx;
     int newY = y + incry;
     
+    // increment regardless of whether player really moves
     playerSteps++;
 
+    // check if off grid horizontally and vertically
     if ( (newX < 0 || newX > WIDTH-SPACE_SIZE) || (newY < 0 || newY > HEIGHT-SPACE_SIZE) )
     {
       System.out.println ("OFF THE GRID!");
-      score -= offGridVal;
-      updateScore();
       return -offGridVal;
     }
 
+    // determine if a wall is in the way
     for (Rectangle r: walls)
     {
       int startX =  (int)r.getX();
@@ -157,57 +181,45 @@ public class GameGUI extends JComponent
       if ((incrx > 0) && (x <= startX) && (startX <= newX) && (y >= startY) && (y <= endY))
       {
         System.out.println("A WALL IS IN THE WAY");
-        score -= hitWallVal;
-        updateScore();
         return -hitWallVal;
       }
       else if ((incrx < 0) && (x >= startX) && (startX >= newX) && (y >= startY) && (y <= endY))
       {
         System.out.println("A WALL IS IN THE WAY");
-        score -= hitWallVal;
-        updateScore();
         return -hitWallVal;
       }
       else if ((incry > 0) && (y <= startY && startY <= newY && x >= startX && x <= endX))
       {
         System.out.println("A WALL IS IN THE WAY");
-        score -= hitWallVal;
-        updateScore();
         return -hitWallVal;
       }
       else if ((incry < 0) && (y >= startY) && (startY >= newY) && (x >= startX) && (x <= endX))
       {
         System.out.println("A WALL IS IN THE WAY");
-        score -= hitWallVal;
-        updateScore();
         return -hitWallVal;
       }     
     }
 
-    x += incrx;
-    y += incry;
-    updateScore();
-
-    // Check if player is on a coin after moving, and pick it up automatically
-    double px = x;
-    double py = y;
-    for (Rectangle p : prizes) {
-      if (p.getWidth() > 0 && p.contains(px, py)) {
-        System.out.println("YOU PICKED UP A PRIZE!");
-        p.setSize(0,0);
-        score += prizeVal;
-        updateScore();
-        // Only one coin can be at a location, so break after picking up
+    // check for trap at new location
+    for (Rectangle r : traps)
+    {
+      if (r.getWidth() > 0 && r.contains(newX, newY))
+      {
+        System.out.println("You stepped on a trap!");
         break;
       }
     }
 
+    // all is well, move player
+    x += incrx;
+    y += incry;
+    repaint();   
     return 0;   
   }
 
   /**
-   * Check the space adjacent to the player for a trap. The adjacent location is one space away from the player, 
-   * designated by newx, newy.
+   * Check for a trap where the player will land
+   *
    * <P>
    * precondition: newx and newy must be the amount a player regularly moves, otherwise an existing trap may go undetected
    * <P>
@@ -217,31 +229,24 @@ public class GameGUI extends JComponent
    */
   public boolean isTrap(int newx, int newy)
   {
-    double px = playerLoc.getX() + newx;
-    double py = playerLoc.getY() + newy;
+    double px = x + newx;
+    double py = y + newy;
 
-
-    for (Rectangle r: traps)
+    for (Rectangle r : traps)
     {
-      // DEBUG: System.out.println("trapx:" + r.getX() + " trapy:" + r.getY() + "\npx: " + px + " py:" + py);
       // zero size traps have already been sprung, ignore
-      if (r.getWidth() > 0)
+      if (r.getWidth() > 0 && r.contains(px, py))
       {
-        // if new location of player has a trap, return true
-        if (r.contains(px, py))
-        {
-          System.out.println("A TRAP IS AHEAD");
-          return true;
-        }
+        return true;
       }
     }
-    // there is no trap where player wants to go
+    // there is no trap 
     return false;
   }
 
   /**
    * Spring the trap. Traps can only be sprung once and attempts to spring
-   * a sprung task results in a penalty.
+   * a sprung trap results in a penalty.
    * <P>
    * precondition: newx and newy must be the amount a player regularly moves, otherwise an existing trap may go unsprung
    * <P>
@@ -251,26 +256,25 @@ public class GameGUI extends JComponent
    */
   public int springTrap(int newx, int newy)
   {
-    double px = playerLoc.getX() + newx;
-    double py = playerLoc.getY() + newy;
+    double px = x + newx;
+    double py = y + newy;
 
-    for (Rectangle r: traps)
+    for (Rectangle r : traps)
     {
       if (r.contains(px, py))
       {
+        // zero size traps indicate it has been sprung, cannot spring again, so ignore
         if (r.getWidth() > 0)
         {
-          r.setSize(0,0);
+          r.setSize(0, 0);
           System.out.println("TRAP IS SPRUNG!");
-          score += trapVal;
-          updateScore();
+          repaint();
           return trapVal;
         }
       }
     }
+    // no trap here, penalty
     System.out.println("THERE IS NO TRAP HERE TO SPRING");
-    score -= trapVal;
-    updateScore();
     return -trapVal;
   }
 
@@ -292,14 +296,11 @@ public class GameGUI extends JComponent
       {
         System.out.println("YOU PICKED UP A PRIZE!");
         p.setSize(0,0);
-        score += prizeVal;
-        updateScore();
+        repaint();
         return prizeVal;
       }
     }
     System.out.println("OOPS, NO PRIZE HERE");
-    score -= prizeVal;
-    updateScore();
     return -prizeVal;  
   }
 
@@ -393,52 +394,49 @@ public class GameGUI extends JComponent
   /** 
    * For internal use and should not be called directly: Users graphics buffer to paint board elements.
    */
-  public void paintComponent(Graphics g) {
-    super.paintComponent(g);
-    Graphics2D g2 = (Graphics2D)g;
+  @Override
+  protected void paintComponent(Graphics g)
+{
+  super.paintComponent(g);
+  Graphics2D g2 = (Graphics2D) g;
 
-    // draw grid
-    g.drawImage(bgImage, 0, 0, null);
+  // draw background
+  if (bgImage != null) {
+    g2.drawImage(bgImage, 0, 0, this);
+  }
 
-    // add (invisible) traps
-    for (Rectangle t : traps)
-    {
-      g2.setPaint(Color.WHITE); 
-      g2.fill(t);
-    }
-
-    // add prizes
-    for (Rectangle p : prizes)
-    {
-      if (p.getWidth() > 0) 
-      {
-        int px = (int)p.getX();
-        int py = (int)p.getY();
-        g.drawImage(prizeImage, px, py, null);
-      }
-    }
-
-    // add walls
-    for (Rectangle r : walls) 
-    {
-      g2.setPaint(Color.BLACK);
+  // draw walls
+  g2.setColor(Color.BLACK);
+  if (walls != null) {
+    for (Rectangle r : walls) {
       g2.fill(r);
     }
-   
-    // draw player, saving its location
-    g.drawImage(player, x, y, 40,40, null);
-    playerLoc.setLocation(x,y);
-
-    // Draw the score in the top right corner in red
-    String scoreText = "Score: " + score;
-    g.setColor(Color.RED);
-    g.setFont(g.getFont().deriveFont(18f));
-    int textWidth = g.getFontMetrics().stringWidth(scoreText);
-    int padding = 20;
-    int xPos = getWidth() - textWidth - padding;
-    int yPos = padding + g.getFontMetrics().getAscent();
-    g.drawString(scoreText, xPos, yPos);
   }
+
+  // draw prizes
+  if (prizes != null && prizeImage != null) {
+    for (Rectangle p : prizes) {
+      if (p.getWidth() > 0) {
+        g2.drawImage(prizeImage, (int)p.getX(), (int)p.getY(), this);
+      }
+    }
+  }
+
+  // draw traps in RED so they are visible
+  g2.setColor(Color.RED);
+  if (traps != null) {
+    for (Rectangle t : traps) {
+      if (t.getWidth() > 0) {
+        g2.fill(t);
+      }
+    }
+  }
+
+  // draw player
+  if (player != null) {
+    g2.drawImage(player, x, y, this);
+  }
+}
 
   /*------------------- private methods -------------------*/
 
@@ -506,10 +504,6 @@ public class GameGUI extends JComponent
        }
        walls[numWalls] = r;
      }
-  }
-
-  private void updateScore() {
-    repaint(); // This will trigger paintComponent to redraw the score
   }
 
   /**

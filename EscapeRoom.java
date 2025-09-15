@@ -14,29 +14,18 @@ import java.util.Scanner;
  */
 public class EscapeRoom
 {
-
-      // describe the game with brief welcome message
-      // determine the size (length and width) a player must move to stay within the grid markings
-      // Allow game commands:
-      //    right, left, up, down: if you try to go off grid or bump into wall, score decreases
-      //    jump over 1 space: you cannot jump over walls
-      //    if you land on a trap, spring a trap to increase score: you must first check if there is a trap, if none exists, penalty
-      //    pick up prize: score increases, if there is no prize, penalty
-      //    help: display all possible commands
-      //    end: reach the far right wall, score increase, game ends, if game ended without reaching far right wall, penalty
-      //    replay: shows number of player steps and resets the board, you or another player can play the same board
-      // Note that you must adjust the score with any method that returns a score
-      // Optional: create a custom image for your player use the file player.png on disk
-    
-      /**** provided code:
-      // set up the game
-      boolean play = true;
-      while (play)
-      {
-        // get user input and call game methods to play 
-        play = false;
-      }
-      */
+  /* TO-DO: Process game commands from user input:
+      right, left, up, down: move player size of move, m, if player try to go off grid or bump into wall, score decreases
+      jump over 1 space: player cannot jump over walls
+      pick up prize: score increases, if there is no prize, penalty
+      help: display all possible commands
+      end: reach the far right wall, score increase, game ends, if game ends without reaching far right wall, penalty
+      replay: shows number of player steps and resets the board, player or another player can play the same board
+        
+      if player land on a trap, spring a trap to increase score: the program must first check if there is a trap, if none exists, penalty
+      Note that you must adjust the score with any method that returns a score
+      Optional: create a custom image for player - use the file player.png on disk
+    */
 
   public static void main(String[] args) 
   {      
@@ -65,13 +54,67 @@ public class EscapeRoom
     boolean play = true;
     while (play)
     {
-      /* TODO: get all the commands working */
-	  /* Your code here */
-    
-      
-    }
 
-  
+      // get user command and validate
+      System.out.print("Enter command:");
+      String input = UserInput.getValidInput(validCommands);
+
+      int moveResult = 0;
+      if (input.equals("right") || input.equals("r")) {
+        moveResult = game.movePlayer(m, 0);
+        score += moveResult;
+        if (game.isTrap(0, 0)) {
+          System.out.println("You stepped on a trap! Do you want to spring it? (yes/no)");
+          String trapInput = in.nextLine().trim().toLowerCase();
+          if (trapInput.equals("yes") || trapInput.equals("y")) {
+            score += game.springTrap(0, 0);
+          } else {
+            System.out.println("You chose not to spring the trap.");
+          }
+        }
+      } else if (input.equals("left") || input.equals("l")) {
+        moveResult = game.movePlayer(-m, 0);
+        score += moveResult;
+        if (game.isTrap(0, 0)) {
+          System.out.println("You stepped on a trap! Do you want to spring it? (yes/no)");
+          String trapInput = in.nextLine().trim().toLowerCase();
+          if (trapInput.equals("yes") || trapInput.equals("y")) {
+            score += game.springTrap(0, 0);
+          } else {
+            System.out.println("You chose not to spring the trap.");
+          }
+        }
+      } else if (input.equals("up") || input.equals("u")) {
+        moveResult = game.movePlayer(0, -m);
+        score += moveResult;
+        if (game.isTrap(0, 0)) {
+          System.out.println("You stepped on a trap! Do you want to spring it? (yes/no)");
+          String trapInput = in.nextLine().trim().toLowerCase();
+          if (trapInput.equals("yes") || trapInput.equals("y")) {
+            score += game.springTrap(0, 0);
+          } else {
+            System.out.println("You chose not to spring the trap.");
+          }
+        }
+      } else if (input.equals("down") || input.equals("d")) {
+        moveResult = game.movePlayer(0, m);
+        score += moveResult;
+        if (game.isTrap(0, 0)) {
+          System.out.println("You stepped on a trap! Do you want to spring it? (yes/no)");
+          String trapInput = in.nextLine().trim().toLowerCase();
+          if (trapInput.equals("yes") || trapInput.equals("y")) {
+            score += game.springTrap(0, 0);
+          } else {
+            System.out.println("You chose not to spring the trap.");
+          }
+        }
+      }
+
+      /* process other user commands*/
+
+      /* uncomment when user quits */
+      // play = false;
+    }
 
     score += game.endGame();
 
@@ -80,4 +123,3 @@ public class EscapeRoom
   }
 }
 
-        
