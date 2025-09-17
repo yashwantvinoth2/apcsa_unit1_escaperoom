@@ -37,7 +37,9 @@ public class EscapeRoom
     System.out.println("pick up all the prizes.\n");
     
     GameGUI game = new GameGUI();
-    game.createBoard();
+  game.createBoard();
+  // show Info after the board is created so walls/prizes/traps are preserved
+  game.openInfo();
 
     // size of move
     int m = 60; 
@@ -60,8 +62,24 @@ public class EscapeRoom
       // get user command and validate
       System.out.print("Enter command:");
       String input = UserInput.getValidInput(validCommands);
-
       int moveResult = 0;
+
+      // full restart/replay command: reset the board and score
+      if (input.equals("replay") || input.equals("restart")) {
+        // restore board and reset player
+        game.resetGame();
+        // reset global score and GUI
+        EscapeRoom.score = 0;
+        game.setScore(0);
+        System.out.println("Game restarted. Score reset to 0.");
+        continue;
+      }
+
+      // single-letter 'r' teleports the player to top-left
+      if (input.equals("r")) {
+        game.teleportToStart();
+        continue;
+      }
       if (input.equals("right") || input.equals("r")) {
         moveResult = game.movePlayer(m, 0);
         score += moveResult;
