@@ -1,20 +1,18 @@
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.Rectangle;
 import java.awt.Image;
 import java.awt.Point;
-
-import javax.swing.JComponent;
-import javax.swing.JFrame;
-
-import java.io.File;
-import javax.imageio.ImageIO;
-
-import java.util.Random;
+import java.awt.Rectangle;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
-import java.util.Scanner;
+import java.io.File;
+import java.util.Random;
+import javax.imageio.ImageIO;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 
 /**
  * A Game board on which to place and move players.
@@ -45,6 +43,22 @@ public class GameGUI extends JComponent
   private Image player;
   private Point playerLoc;
   private int playerSteps;
+  // score to display in GUI
+  private int guiScore = 0;
+
+  /**
+   * Update the score displayed in the GUI.
+   */
+  public void setScore(int s)
+  {
+    guiScore = s;
+    repaint();
+  }
+
+  public int getGuiScore()
+  {
+    return guiScore;
+  }
 
   // walls, prizes, traps
   private int totalWalls;
@@ -56,7 +70,7 @@ public class GameGUI extends JComponent
   private Rectangle[] traps;
 
   // scores, sometimes awarded as (negative) penalties
-  private int prizeVal = 10;
+  private int prizeVal = 1;
   private int trapVal = 5;
   private int endVal = 10;
   private int offGridVal = 5; // penalty only
@@ -97,9 +111,32 @@ public class GameGUI extends JComponent
     frame.setTitle("EscapeRoom");
     frame.setSize(WIDTH, HEIGHT);
     frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+    // use absolute positioning so we can place components (the game canvas and a button)
+    frame.setLayout(null);
+    // place this component to fill the frame
+    this.setBounds(0, 0, WIDTH, HEIGHT);
     frame.add(this);
+
+    // add an Info button at the top-right
+    JButton infoButton = new JButton("Info");
+    int btnW = 80;
+    int btnH = 28;
+    infoButton.setBounds(WIDTH - btnW - 8, 6, btnW, btnH);
+    infoButton.addActionListener(ae -> {
+      // show a simple info dialog when clicked
+      String msg = "Score: " + guiScore + "\nSteps: " + playerSteps + "\nPrizes left: ";
+      int prizesLeft = 0;
+      if (prizes != null) {
+        for (Rectangle p : prizes) if (p.getWidth() > 0) prizesLeft++;
+      }
+      msg += prizesLeft;
+      JOptionPane.showMessageDialog(frame, msg, "Info", JOptionPane.INFORMATION_MESSAGE);
+    });
+    frame.add(infoButton);
+
+    frame.setResizable(false);
     frame.setVisible(true);
-    frame.setResizable(false); 
 
     // set default config
     totalWalls = 20;
@@ -167,6 +204,9 @@ public class GameGUI extends JComponent
     if ( (newX < 0 || newX > WIDTH-SPACE_SIZE) || (newY < 0 || newY > HEIGHT-SPACE_SIZE) )
     {
       System.out.println ("OFF THE GRID!");
+      // deduct one point from global score and update GUI
+      EscapeRoom.score -= 1;
+      setScore(EscapeRoom.score);
       return -offGridVal;
     }
 
@@ -181,21 +221,33 @@ public class GameGUI extends JComponent
       if ((incrx > 0) && (x <= startX) && (startX <= newX) && (y >= startY) && (y <= endY))
       {
         System.out.println("A WALL IS IN THE WAY");
+        // deduct one point from global score and update GUI
+        EscapeRoom.score -= 1;
+        setScore(EscapeRoom.score);
         return -hitWallVal;
       }
       else if ((incrx < 0) && (x >= startX) && (startX >= newX) && (y >= startY) && (y <= endY))
       {
         System.out.println("A WALL IS IN THE WAY");
+        // deduct one point from global score and update GUI
+        EscapeRoom.score -= 1;
+        setScore(EscapeRoom.score);
         return -hitWallVal;
       }
       else if ((incry > 0) && (y <= startY && startY <= newY && x >= startX && x <= endX))
       {
         System.out.println("A WALL IS IN THE WAY");
+        // deduct one point from global score and update GUI
+        EscapeRoom.score -= 1;
+        setScore(EscapeRoom.score);
         return -hitWallVal;
       }
       else if ((incry < 0) && (y >= startY) && (startY >= newY) && (x >= startX) && (x <= endX))
       {
         System.out.println("A WALL IS IN THE WAY");
+        // deduct one point from global score and update GUI
+        EscapeRoom.score -= 1;
+        setScore(EscapeRoom.score);
         return -hitWallVal;
       }     
     }
@@ -207,6 +259,26 @@ public class GameGUI extends JComponent
       {
         System.out.println("You stepped on a trap!");
         break;
+      }
+    }
+
+    // check for prize at new location (coin)
+    for (Rectangle p : prizes)
+    {
+      if (p.getWidth() > 0 && p.contains(newX, newY))
+      {
+        System.out.println("YOU PICKED UP A PRIZE!");
+        // increment the global score and update GUI display
+        EscapeRoom.score += 1;
+        setScore(EscapeRoom.score);
+        // remove the prize so it cannot be picked up again
+        p.setSize(0,0);
+        // move player onto the prize square so graphics update correctly
+        x += incrx;
+        y += incry;
+        repaint();
+        // return 0 because the GUI already updated the global score
+        return 0;
       }
     }
 
@@ -404,6 +476,10 @@ public class GameGUI extends JComponent
   if (bgImage != null) {
     g2.drawImage(bgImage, 0, 0, this);
   }
+
+  // draw Score in top-left
+  g2.setColor(Color.BLUE);
+  g2.drawString("Score: " + guiScore, 10, 12);
 
   // draw walls
   g2.setColor(Color.BLACK);

@@ -14,6 +14,8 @@ import java.util.Scanner;
  */
 public class EscapeRoom
 {
+  // global score so GUI can update it when actions happen in the GUI thread
+  public static int score = 0;
   /* TO-DO: Process game commands from user input:
       right, left, up, down: move player size of move, m, if player try to go off grid or bump into wall, score decreases
       jump over 1 space: player cannot jump over walls
@@ -43,7 +45,7 @@ public class EscapeRoom
     int px = 0;
     int py = 0; 
     
-    int score = 0;
+  // use the static score field
 
     Scanner in = new Scanner(System.in);
     String[] validCommands = { "right", "left", "up", "down", "r", "l", "u", "d",
@@ -63,11 +65,13 @@ public class EscapeRoom
       if (input.equals("right") || input.equals("r")) {
         moveResult = game.movePlayer(m, 0);
         score += moveResult;
+        game.setScore(score);
         if (game.isTrap(0, 0)) {
           System.out.println("You stepped on a trap! Do you want to spring it? (yes/no)");
           String trapInput = in.nextLine().trim().toLowerCase();
           if (trapInput.equals("yes") || trapInput.equals("y")) {
             score += game.springTrap(0, 0);
+            game.setScore(score);
           } else {
             System.out.println("You chose not to spring the trap.");
           }
@@ -75,11 +79,13 @@ public class EscapeRoom
       } else if (input.equals("left") || input.equals("l")) {
         moveResult = game.movePlayer(-m, 0);
         score += moveResult;
+        game.setScore(score);
         if (game.isTrap(0, 0)) {
           System.out.println("You stepped on a trap! Do you want to spring it? (yes/no)");
           String trapInput = in.nextLine().trim().toLowerCase();
           if (trapInput.equals("yes") || trapInput.equals("y")) {
             score += game.springTrap(0, 0);
+            game.setScore(score);
           } else {
             System.out.println("You chose not to spring the trap.");
           }
@@ -87,11 +93,13 @@ public class EscapeRoom
       } else if (input.equals("up") || input.equals("u")) {
         moveResult = game.movePlayer(0, -m);
         score += moveResult;
+        game.setScore(score);
         if (game.isTrap(0, 0)) {
           System.out.println("You stepped on a trap! Do you want to spring it? (yes/no)");
           String trapInput = in.nextLine().trim().toLowerCase();
           if (trapInput.equals("yes") || trapInput.equals("y")) {
             score += game.springTrap(0, 0);
+            game.setScore(score);
           } else {
             System.out.println("You chose not to spring the trap.");
           }
@@ -99,11 +107,13 @@ public class EscapeRoom
       } else if (input.equals("down") || input.equals("d")) {
         moveResult = game.movePlayer(0, m);
         score += moveResult;
+        game.setScore(score);
         if (game.isTrap(0, 0)) {
           System.out.println("You stepped on a trap! Do you want to spring it? (yes/no)");
           String trapInput = in.nextLine().trim().toLowerCase();
           if (trapInput.equals("yes") || trapInput.equals("y")) {
             score += game.springTrap(0, 0);
+            game.setScore(score);
           } else {
             System.out.println("You chose not to spring the trap.");
           }
@@ -117,6 +127,7 @@ public class EscapeRoom
     }
 
     score += game.endGame();
+  game.setScore(score);
 
     System.out.println("score=" + score);
     System.out.println("steps=" + game.getSteps());
