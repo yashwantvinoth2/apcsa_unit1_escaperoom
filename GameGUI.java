@@ -69,6 +69,9 @@ public class GameGUI extends JComponent
   private Rectangle[] prizes;
   private int totalTraps;
   private Rectangle[] traps;
+  // keep original locations so replay can restore exact original positions
+  private Rectangle[] origPrizes;
+  private Rectangle[] origTraps;
 
   // scores, sometimes awarded as (negative) penalties
   private int prizeVal = 1;
@@ -128,11 +131,30 @@ public class GameGUI extends JComponent
     frame.setSize(WIDTH, HEIGHT);
     frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-    // use absolute positioning so we can place components (the game canvas and a button)
-    frame.setLayout(null);
-    // place this component to fill the frame
-    this.setBounds(0, 0, WIDTH, HEIGHT);
-    frame.add(this);
+
+  // use absolute positioning so we can place components (the game canvas and a button)
+  frame.setLayout(null);
+  // place this component to fill the frame
+  this.setBounds(0, 0, WIDTH, HEIGHT);
+  // set null layout on the canvas so child components can be positioned
+  this.setLayout(null);
+  frame.add(this);
+
+  // add an Info button that sits on the game canvas (so it appears over the grid)
+  JButton infoButton = new JButton("info");
+    // make the button as small as reasonably possible
+    int btnW = 28;
+    int btnH = 20;
+    infoButton.setBounds(WIDTH - btnW - 25, 6, btnW, btnH);
+    infoButton.setFocusable(false);
+    infoButton.setMargin(new java.awt.Insets(0,0,0,0));
+    infoButton.setFont(infoButton.getFont().deriveFont(10f));
+    infoButton.addActionListener(ae -> showInfoDialog());
+  // add button to the canvas instead of the frame so it is on the grid
+  this.add(infoButton);
+
+  frame.setResizable(false);
+  frame.setVisible(true);
 
     //use arrow keys to move player around the board
     this.setFocusable(true);
@@ -374,13 +396,17 @@ public class GameGUI extends JComponent
       if (p.getWidth() > 0 && p.contains(newX, newY))
       {
         System.out.println("YOU PICKED UP A PRIZE!");
-        EscapeRoom.score += 5; // changed from += 1
+        // increment the global score and update GUI display
+        EscapeRoom.score += 5;
         setScore(EscapeRoom.score);
         scoreMsg = "+5 from coin";
+        // remove the prize so it cannot be picked up again
         p.setSize(0,0);
+        // move player onto the prize square so graphics update correctly
         x += incrx;
         y += incry;
         repaint();
+        // return 0 because the GUI already updated the global score
         return 0;
       }
     }
@@ -550,11 +576,23 @@ public class GameGUI extends JComponent
 
     int win = playerAtEnd();
   
-    // resize prizes and traps to "reactivate" them
-    for (Rectangle p: prizes)
-      p.setSize(SPACE_SIZE/3, SPACE_SIZE/3);
-    for (Rectangle t: traps)
-      t.setSize(SPACE_SIZE/3, SPACE_SIZE/3);
+    // restore prizes and traps to their original positions and sizes
+    if (origPrizes != null && prizes != null) {
+      for (int i = 0; i < origPrizes.length; i++) {
+        Rectangle op = origPrizes[i];
+        if (op != null) {
+          prizes[i] = new Rectangle((int)op.getX(), (int)op.getY(), (int)op.getWidth(), (int)op.getHeight());
+        }
+      }
+    }
+    if (origTraps != null && traps != null) {
+      for (int i = 0; i < origTraps.length; i++) {
+        Rectangle ot = origTraps[i];
+        if (ot != null) {
+          traps[i] = new Rectangle((int)ot.getX(), (int)ot.getY(), (int)ot.getWidth(), (int)ot.getHeight());
+        }
+      }
+    }
 
     // move player to start of board
     x = START_LOC_X;
@@ -647,15 +685,17 @@ public class GameGUI extends JComponent
   {
     int s = SPACE_SIZE; 
     Random rand = new Random();
-     for (int numPrizes = 0; numPrizes < totalPrizes; numPrizes++)
-     {
-      int h = rand.nextInt(GRID_H);
-      int w = rand.nextInt(GRID_W);
+    origPrizes = new Rectangle[totalPrizes];
+    prizes = new Rectangle[totalPrizes];
+    for (int numPrizes = 0; numPrizes < totalPrizes; numPrizes++)
+    {
+    int h = rand.nextInt(GRID_H);
+    int w = rand.nextInt(GRID_W);
 
-      Rectangle r;
-      r = new Rectangle((w*s + 15),(h*s + 15), 15, 15);
-      prizes[numPrizes] = r;
-     }
+    Rectangle r = new Rectangle((w*s + 15),(h*s + 15), 15, 15);
+    origPrizes[numPrizes] = new Rectangle((int)r.getX(), (int)r.getY(), (int)r.getWidth(), (int)r.getHeight());
+    prizes[numPrizes] = new Rectangle((int)r.getX(), (int)r.getY(), (int)r.getWidth(), (int)r.getHeight());
+    }
   }
 
   /*
@@ -666,15 +706,17 @@ public class GameGUI extends JComponent
   {
     int s = SPACE_SIZE; 
     Random rand = new Random();
-     for (int numTraps = 0; numTraps < totalTraps; numTraps++)
-     {
-      int h = rand.nextInt(GRID_H);
-      int w = rand.nextInt(GRID_W);
+    origTraps = new Rectangle[totalTraps];
+    traps = new Rectangle[totalTraps];
+    for (int numTraps = 0; numTraps < totalTraps; numTraps++)
+    {
+    int h = rand.nextInt(GRID_H);
+    int w = rand.nextInt(GRID_W);
 
-      Rectangle r;
-      r = new Rectangle((w*s + 15),(h*s + 15), 15, 15);
-      traps[numTraps] = r;
-     }
+    Rectangle r = new Rectangle((w*s + 15),(h*s + 15), 15, 15);
+    origTraps[numTraps] = new Rectangle((int)r.getX(), (int)r.getY(), (int)r.getWidth(), (int)r.getHeight());
+    traps[numTraps] = new Rectangle((int)r.getX(), (int)r.getY(), (int)r.getWidth(), (int)r.getHeight());
+    }
   }
 
   /*
@@ -703,6 +745,98 @@ public class GameGUI extends JComponent
        }
        walls[numWalls] = r;
      }
+  }
+
+  /**
+   * Show the Info dialog with the exact instructions.
+   */
+  private void showInfoDialog()
+  {
+    String msg = " - Use the arrow keys to navigate through the gate\n"
+               + " - Getting a coin increases the score\n"
+               + " - Running into walls or going off the grid decreases the score\n"
+               + "  - Landmines are placed in random unknown places in the grid, and running over them ends the attempt\n"
+               + " - Type 'r' to restart the game\n"
+               + "  - Type 'q' to quit the game";
+    JOptionPane.showMessageDialog(this, msg, "Info", JOptionPane.INFORMATION_MESSAGE);
+  }
+
+  /**
+   * Public wrapper to open the info dialog from outside the class.
+   */
+  public void openInfo()
+  {
+    showInfoDialog();
+  }
+
+  /**
+   * Reset the game board back to original positions and reset player to start.
+   * This will restore coins and traps to their original locations and reset player steps.
+   */
+  public void resetGame()
+  {
+    // restore prizes/traps from original buffers
+    if (origPrizes != null) {
+      prizes = new Rectangle[origPrizes.length];
+      for (int i = 0; i < origPrizes.length; i++) {
+        Rectangle op = origPrizes[i];
+        if (op != null) prizes[i] = new Rectangle((int)op.getX(), (int)op.getY(), (int)op.getWidth(), (int)op.getHeight());
+      }
+    }
+    if (origTraps != null) {
+      traps = new Rectangle[origTraps.length];
+      for (int i = 0; i < origTraps.length; i++) {
+        Rectangle ot = origTraps[i];
+        if (ot != null) traps[i] = new Rectangle((int)ot.getX(), (int)ot.getY(), (int)ot.getWidth(), (int)ot.getHeight());
+      }
+    }
+    // reset player
+    x = START_LOC_X;
+    y = START_LOC_Y;
+    playerSteps = 0;
+    repaint();
+  }
+
+  /**
+   * Teleport the player to the start (top-left) corner.
+   */
+  public void teleportToStart()
+  {
+    x = START_LOC_X;
+    y = START_LOC_Y;
+    // update playerLoc if present
+    if (playerLoc == null) playerLoc = new Point(x,y);
+    else playerLoc.setLocation(x,y);
+
+    // If original prize/trap positions are recorded, ensure any missing ones are restored.
+    if (origPrizes != null) {
+      if (prizes == null) prizes = new Rectangle[origPrizes.length];
+      for (int i = 0; i < origPrizes.length; i++) {
+        Rectangle op = origPrizes[i];
+        if (op == null) continue;
+        // recreate prize if it doesn't exist or was picked up (zero size)
+        if (prizes[i] == null || prizes[i].getWidth() == 0) {
+          prizes[i] = new Rectangle((int)op.getX(), (int)op.getY(), (int)op.getWidth(), (int)op.getHeight());
+        }
+      }
+    }
+
+    if (origTraps != null) {
+      if (traps == null) traps = new Rectangle[origTraps.length];
+      for (int i = 0; i < origTraps.length; i++) {
+        Rectangle ot = origTraps[i];
+        if (ot == null) continue;
+        // recreate trap if it doesn't exist or was sprung (zero size)
+        if (traps[i] == null || traps[i].getWidth() == 0) {
+          traps[i] = new Rectangle((int)ot.getX(), (int)ot.getY(), (int)ot.getWidth(), (int)ot.getHeight());
+        }
+      }
+    }
+
+    // reset score to 0 when teleporting to start
+    EscapeRoom.score = 0;
+    setScore(0);
+    repaint();
   }
 
   /**
