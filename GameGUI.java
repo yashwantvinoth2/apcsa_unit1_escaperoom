@@ -1,4 +1,5 @@
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
@@ -82,6 +83,21 @@ public class GameGUI extends JComponent
   // game frame
   private JFrame frame;
 
+  // Add this field to track last direction
+  private int lastDx = 0;
+  private int lastDy = 0;
+
+  // Add these fields to your GameGUI class:
+  private boolean onTrap = false;
+  private Rectangle currentTrap = null;
+  private javax.swing.Timer trapTimer = null;
+
+  // Add this field at the top of your class:
+  private String scoreMsg = "";
+
+  // Add a field to track game state
+  private boolean gameWon = false;
+
   /**
    * Constructor for the GameGUI class.
    * Creates a frame with a background image and a player that will move around the board.
@@ -115,6 +131,7 @@ public class GameGUI extends JComponent
     frame.setSize(WIDTH, HEIGHT);
     frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
+
   // use absolute positioning so we can place components (the game canvas and a button)
   frame.setLayout(null);
   // place this component to fill the frame
@@ -139,33 +156,108 @@ public class GameGUI extends JComponent
   frame.setResizable(false);
   frame.setVisible(true);
 
+    //use arrow keys to move player around the board
+    this.setFocusable(true);
+    this.requestFocusInWindow();
+
+    this.addKeyListener(new KeyAdapter() {
+      @Override
+      public void keyPressed(KeyEvent e) {
+        int key = e.getKeyCode();
+        if (gameWon) {
+            // Only allow R or Q (to be implemented later)
+            // For now, just ignore all keys
+            return;
+        }
+        if (key == KeyEvent.VK_RIGHT) {
+          movePlayer(SPACE_SIZE, 0);
+          lastDx = SPACE_SIZE;
+          lastDy = 0;
+        } else if (key == KeyEvent.VK_LEFT) {
+          movePlayer(-SPACE_SIZE, 0);
+          lastDx = -SPACE_SIZE;
+          lastDy = 0;
+        } else if (key == KeyEvent.VK_DOWN) {
+          movePlayer(0, SPACE_SIZE);
+          lastDx = 0;
+          lastDy = SPACE_SIZE;
+        } else if (key == KeyEvent.VK_UP) {
+          movePlayer(0, -SPACE_SIZE);
+          lastDx = 0;
+          lastDy = -SPACE_SIZE;
+        } else if (key == KeyEvent.VK_D) { // D key for disarm
+          if (onTrap && currentTrap != null && currentTrap.getWidth() > 0) {
+            // Disarm the trap in time
+            System.out.println("TRAP IS SPRUNG!");
+            EscapeRoom.score += 5;
+            setScore(EscapeRoom.score);
+            scoreMsg = "+5 from disarming trap";
+            currentTrap.setSize(0, 0);
+            repaint();
+            onTrap = false;
+            if (trapTimer != null && trapTimer.isRunning()) {
+              trapTimer.stop();
+            }
+            currentTrap = null;
+          } else {
+            int result = springTrap(0, 0);
+            EscapeRoom.score += result;
+            setScore(EscapeRoom.score);
+          }
+          GameGUI.this.requestFocusInWindow();
+        } else if (key == KeyEvent.VK_SPACE) { // Spacebar for jump
+          // Only jump if a direction has been set
+          if (lastDx != 0 || lastDy != 0) {
+            // Check for walls in both spaces
+            boolean blocked = false;
+            int currX = x;
+            int currY = y;
+            for (int i = 1; i <= 2; i++) {
+              int testX = currX + lastDx / 2 * i;
+              int testY = currY + lastDy / 2 * i;
+              for (Rectangle r : walls) {
+                if (r.contains(testX, testY)) {
+                  blocked = true;
+                  break;
+                }
+              }
+              if (blocked) break;
+            }
+            if (!blocked) {
+              movePlayer(lastDx * 2 / Math.abs(lastDx + lastDy == 0 ? 1 : 1), lastDy * 2 / Math.abs(lastDx + lastDy == 0 ? 1 : 1));
+            } else {
+              System.out.println("Can't jump over a wall!");
+            }
+          }
+        }
+      }
+    });
+    
+    // add an Info button at the top-right
+    JButton infoButton = new JButton("Info");
+    int btnW = 80;
+    int btnH = 28;
+    infoButton.setBounds(WIDTH - btnW - 8, 6, btnW, btnH);
+    infoButton.addActionListener(ae -> {
+      // show a simple info dialog when clicked
+      String msg = "Score: " + guiScore + "\nSteps: " + playerSteps + "\nPrizes left: ";
+      int prizesLeft = 0;
+      if (prizes != null) {
+        for (Rectangle p : prizes) if (p.getWidth() > 0) prizesLeft++;
+      }
+      msg += prizesLeft;
+      JOptionPane.showMessageDialog(frame, msg, "Info", JOptionPane.INFORMATION_MESSAGE);
+      this.requestFocusInWindow();
+    });
+    frame.add(infoButton);
+
+    frame.setResizable(false);
+    frame.setVisible(true);
+
     // set default config
     totalWalls = 20;
     totalPrizes = 3;
     totalTraps = 5;
-
-    // Add key listener for arrow keys
-    frame.addKeyListener(new KeyAdapter() {
-      @Override
-      public void keyPressed(KeyEvent e) {
-        int key = e.getKeyCode();
-        if (key == KeyEvent.VK_RIGHT) {
-          movePlayer(SPACE_SIZE, 0);
-        } else if (key == KeyEvent.VK_LEFT) {
-          movePlayer(-SPACE_SIZE, 0);
-        } else if (key == KeyEvent.VK_DOWN) {
-          movePlayer(0, SPACE_SIZE);
-        } else if (key == KeyEvent.VK_UP) {
-          movePlayer(0, -SPACE_SIZE);
-        } else if (key == KeyEvent.VK_R) {
-          // teleport to start when 'R' is pressed
-          teleportToStart();
-        } else if (key == KeyEvent.VK_Q) {
-          // quit the game when 'Q' is pressed
-          endGame();
-        }
-      }
-    });
   }
 
  /**
@@ -211,9 +303,10 @@ public class GameGUI extends JComponent
     if ( (newX < 0 || newX > WIDTH-SPACE_SIZE) || (newY < 0 || newY > HEIGHT-SPACE_SIZE) )
     {
       System.out.println ("OFF THE GRID!");
-      // deduct one point from global score and update GUI
       EscapeRoom.score -= 1;
       setScore(EscapeRoom.score);
+      scoreMsg = "-1 from going off the grid";
+      repaint();
       return -offGridVal;
     }
 
@@ -228,33 +321,37 @@ public class GameGUI extends JComponent
       if ((incrx > 0) && (x <= startX) && (startX <= newX) && (y >= startY) && (y <= endY))
       {
         System.out.println("A WALL IS IN THE WAY");
-        // deduct one point from global score and update GUI
         EscapeRoom.score -= 1;
         setScore(EscapeRoom.score);
+        scoreMsg = "-1 from running into a wall";
+        repaint();
         return -hitWallVal;
       }
       else if ((incrx < 0) && (x >= startX) && (startX >= newX) && (y >= startY) && (y <= endY))
       {
         System.out.println("A WALL IS IN THE WAY");
-        // deduct one point from global score and update GUI
         EscapeRoom.score -= 1;
         setScore(EscapeRoom.score);
+        scoreMsg = "-1 from running into a wall";
+        repaint();
         return -hitWallVal;
       }
       else if ((incry > 0) && (y <= startY && startY <= newY && x >= startX && x <= endX))
       {
         System.out.println("A WALL IS IN THE WAY");
-        // deduct one point from global score and update GUI
         EscapeRoom.score -= 1;
         setScore(EscapeRoom.score);
+        scoreMsg = "-1 from running into a wall";
+        repaint();
         return -hitWallVal;
       }
       else if ((incry < 0) && (y >= startY) && (startY >= newY) && (x >= startX) && (x <= endX))
       {
         System.out.println("A WALL IS IN THE WAY");
-        // deduct one point from global score and update GUI
         EscapeRoom.score -= 1;
         setScore(EscapeRoom.score);
+        scoreMsg = "-1 from running into a wall";
+        repaint();
         return -hitWallVal;
       }     
     }
@@ -264,7 +361,31 @@ public class GameGUI extends JComponent
     {
       if (r.getWidth() > 0 && r.contains(newX, newY))
       {
-        System.out.println("You stepped on a trap!");
+        onTrap = true;
+        currentTrap = r;
+
+        // If a previous timer is running, stop it
+        if (trapTimer != null && trapTimer.isRunning()) {
+          trapTimer.stop();
+        }
+
+        // Start a new timer for 2 seconds (2000 ms)
+        trapTimer = new javax.swing.Timer(2000, evt -> {
+          if (onTrap && currentTrap != null && currentTrap.getWidth() > 0) {
+            System.out.println("Trap triggered! -10 points.");
+            EscapeRoom.score -= 10;
+            setScore(EscapeRoom.score);
+            scoreMsg = "-10 from not disarming a trap";
+            repaint();
+            // Remove the trap
+            currentTrap.setSize(0, 0);
+            repaint();
+            onTrap = false;
+            currentTrap = null;
+          }
+        });
+        trapTimer.setRepeats(false);
+        trapTimer.start();
         break;
       }
     }
@@ -276,8 +397,9 @@ public class GameGUI extends JComponent
       {
         System.out.println("YOU PICKED UP A PRIZE!");
         // increment the global score and update GUI display
-        EscapeRoom.score += 1;
+        EscapeRoom.score += 5;
         setScore(EscapeRoom.score);
+        scoreMsg = "+5 from coin";
         // remove the prize so it cannot be picked up again
         p.setSize(0,0);
         // move player onto the prize square so graphics update correctly
@@ -292,7 +414,16 @@ public class GameGUI extends JComponent
     // all is well, move player
     x += incrx;
     y += incry;
-    repaint();   
+    playerLoc.setLocation(x, y);
+    repaint();
+
+    // Check for win condition: top right corner
+    if (x > WIDTH - 2*SPACE_SIZE && y == START_LOC_Y && !gameWon) {
+        gameWon = true;
+        scoreMsg = "You win! Final score: " + EscapeRoom.score;
+        repaint();
+        // Do NOT show JOptionPane here!
+    }
     return 0;   
   }
 
@@ -347,6 +478,7 @@ public class GameGUI extends JComponent
         {
           r.setSize(0, 0);
           System.out.println("TRAP IS SPRUNG!");
+          scoreMsg = "+5 from disarming trap";
           repaint();
           return trapVal;
         }
@@ -354,6 +486,7 @@ public class GameGUI extends JComponent
     }
     // no trap here, penalty
     System.out.println("THERE IS NO TRAP HERE TO SPRING");
+    scoreMsg = "-5 from trying to spring a non-existent trap";
     return -trapVal;
   }
 
@@ -374,12 +507,15 @@ public class GameGUI extends JComponent
       if (p.getWidth() > 0 && p.contains(px, py))
       {
         System.out.println("YOU PICKED UP A PRIZE!");
+        scoreMsg = "+5 from coin";
         p.setSize(0,0);
         repaint();
         return prizeVal;
       }
     }
     System.out.println("OOPS, NO PRIZE HERE");
+    scoreMsg = "-5 from trying to pick up a non-existent prize";
+    repaint();
     return -prizeVal;  
   }
 
@@ -499,6 +635,22 @@ public class GameGUI extends JComponent
   // draw Score in top-left
   g2.setColor(Color.BLUE);
   g2.drawString("Score: " + guiScore, 10, 12);
+  g2.setColor(Color.MAGENTA);
+  g2.drawString(scoreMsg, 100, 12); // Draw message next to score
+
+  // draw win message overlay if game is won
+  if (gameWon) {
+    // Draw a dark, semi-transparent rectangle over the whole component
+    g2.setColor(new Color(0, 0, 0, 220)); // More opaque for a darker overlay
+    g2.fillRect(0, 0, getWidth(), getHeight());
+
+    g2.setColor(Color.YELLOW);
+    g2.setFont(g2.getFont().deriveFont(Font.BOLD, 28f));
+    g2.drawString("Congratulations! You win!", 80, 140);
+    g2.setFont(g2.getFont().deriveFont(Font.PLAIN, 22f));
+    g2.drawString("Final score: " + EscapeRoom.score, 80, 180);
+    g2.drawString("Press 'R' to restart or 'Q' to quit.", 80, 220);
+  }
 
   // draw walls
   g2.setColor(Color.BLACK);
@@ -513,16 +665,6 @@ public class GameGUI extends JComponent
     for (Rectangle p : prizes) {
       if (p.getWidth() > 0) {
         g2.drawImage(prizeImage, (int)p.getX(), (int)p.getY(), this);
-      }
-    }
-  }
-
-  // draw traps in RED so they are visible
-  g2.setColor(Color.RED);
-  if (traps != null) {
-    for (Rectangle t : traps) {
-      if (t.getWidth() > 0) {
-        g2.fill(t);
       }
     }
   }
@@ -704,7 +846,6 @@ public class GameGUI extends JComponent
   private int playerAtEnd() 
   {
     int score;
-
     double px = playerLoc.getX();
     if (px > (WIDTH - 2*SPACE_SIZE))
     {
@@ -717,6 +858,5 @@ public class GameGUI extends JComponent
       score = -endVal;
     }
     return score;
-  
   }
 }
