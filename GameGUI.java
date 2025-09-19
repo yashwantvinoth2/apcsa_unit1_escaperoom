@@ -92,6 +92,9 @@ public class GameGUI extends JComponent
   private Rectangle currentTrap = null;
   private javax.swing.Timer trapTimer = null;
 
+  // flag to indicate screen tint when on a trap
+  private boolean trapTint = false;
+
   // Add this field at the top of your class:
   private String scoreMsg = "";
 
@@ -145,13 +148,9 @@ public class GameGUI extends JComponent
     // make the button as small as reasonably possible
     int btnW = 28;
     int btnH = 20;
-    infoButton.setBounds(WIDTH - btnW - 25, 6, btnW, btnH);
     infoButton.setFocusable(false);
     infoButton.setMargin(new java.awt.Insets(0,0,0,0));
     infoButton.setFont(infoButton.getFont().deriveFont(10f));
-    infoButton.addActionListener(ae -> showInfoDialog());
-  // add button to the canvas instead of the frame so it is on the grid
-  this.add(infoButton);
 
   frame.setResizable(false);
   frame.setVisible(true);
@@ -164,11 +163,6 @@ public class GameGUI extends JComponent
       @Override
       public void keyPressed(KeyEvent e) {
         int key = e.getKeyCode();
-        if (gameWon) {
-            // Only allow R or Q (to be implemented later)
-            // For now, just ignore all keys
-            return;
-        }
         if (key == KeyEvent.VK_RIGHT) {
           movePlayer(SPACE_SIZE, 0);
           lastDx = SPACE_SIZE;
@@ -195,6 +189,8 @@ public class GameGUI extends JComponent
             currentTrap.setSize(0, 0);
             repaint();
             onTrap = false;
+            // clear tint and stop timer
+            trapTint = false;
             if (trapTimer != null && trapTimer.isRunning()) {
               trapTimer.stop();
             }
@@ -229,27 +225,42 @@ public class GameGUI extends JComponent
               System.out.println("Can't jump over a wall!");
             }
           }
+        } else if (key == KeyEvent.VK_R) {
+      // allow R to restart: generate a new board and reset state
+      // stop any running trap timer
+      if (trapTimer != null && trapTimer.isRunning()) trapTimer.stop();
+      onTrap = false;
+      currentTrap = null;
+      trapTint = false;
+      // regenerate the board (new walls/prizes/traps)
+      createBoard();
+      // reset player and score
+      x = START_LOC_X;
+      y = START_LOC_Y;
+      playerSteps = 0;
+      EscapeRoom.score = 0;
+      setScore(0);
+      gameWon = false;
+      // clear any temporary score message (magenta text)
+      scoreMsg = "";
+      repaint();
+        } else if (key == KeyEvent.VK_Q) {
+            // allow Q to quit the game
+            endGame();
+            System.exit(0);
         }
       }
     });
     
-    // add an Info button at the top-right
-    JButton infoButton = new JButton("Info");
-    int btnW = 80;
-    int btnH = 28;
-    infoButton.setBounds(WIDTH - btnW - 8, 6, btnW, btnH);
+    // finalize the Info button placement and behavior at the top-right
+    infoButton.setBounds(WIDTH - btnW - 30, 6, btnW, btnH);
+    // show the full instructions dialog when clicked
     infoButton.addActionListener(ae -> {
-      // show a simple info dialog when clicked
-      String msg = "Score: " + guiScore + "\nSteps: " + playerSteps + "\nPrizes left: ";
-      int prizesLeft = 0;
-      if (prizes != null) {
-        for (Rectangle p : prizes) if (p.getWidth() > 0) prizesLeft++;
-      }
-      msg += prizesLeft;
-      JOptionPane.showMessageDialog(frame, msg, "Info", JOptionPane.INFORMATION_MESSAGE);
+      showInfoDialog();
       this.requestFocusInWindow();
     });
-    frame.add(infoButton);
+    // add the finalized info button to the game canvas so it appears over the grid
+    this.add(infoButton);
 
     frame.setResizable(false);
     frame.setVisible(true);
@@ -300,7 +311,41 @@ public class GameGUI extends JComponent
     playerSteps++;
 
     // check if off grid horizontally and vertically
-    if ( (newX < 0 || newX > WIDTH-SPACE_SIZE) || (newY < 0 || newY > HEIGHT-SPACE_SIZE) )
+    // Special case: attempting to move off the right edge should end the game
+    if (newX > WIDTH - SPACE_SIZE)
+    {
+      // check if a wall is in the way between current x and the off-grid point
+      for (Rectangle r: walls)
+      {
+        int startX =  (int)r.getX();
+        int startY =  (int)r.getY();
+        int endY = (int) r.getY() + (int)r.getHeight();
+
+        if ((incrx > 0) && (x <= startX) && (startX <= newX) && (y >= startY) && (y <= endY))
+        {
+          // wall blocks exit to the right: treat as hitting a wall
+          System.out.println("A WALL IS IN THE WAY");
+          EscapeRoom.score -= 1;
+          setScore(EscapeRoom.score);
+          scoreMsg = "-1 from running into a wall";
+          repaint();
+          return -hitWallVal;
+        }
+      }
+
+      // no wall blocking: player exits to the right and wins
+      System.out.println("YOU MADE IT OFF THE GRID!");
+      // move player off the grid so other logic that checks playerLoc will recognize end
+      x = newX;
+      playerLoc.setLocation(x, y);
+      gameWon = true;
+      scoreMsg = "You win! Final score: " + EscapeRoom.score;
+      repaint();
+      return 0;
+    }
+
+    // normal off-grid handling (other sides) -> penalty
+    if ( (newX < 0 || newY < 0 || newY > HEIGHT-SPACE_SIZE) )
     {
       System.out.println ("OFF THE GRID!");
       EscapeRoom.score -= 1;
@@ -364,6 +409,11 @@ public class GameGUI extends JComponent
         onTrap = true;
         currentTrap = r;
 
+        // set tint and notify in terminal
+        trapTint = true;
+        System.out.println("You stepped on a trap! You have 2 seconds to disarm it.");
+        repaint();
+
         // If a previous timer is running, stop it
         if (trapTimer != null && trapTimer.isRunning()) {
           trapTimer.stop();
@@ -376,9 +426,10 @@ public class GameGUI extends JComponent
             EscapeRoom.score -= 10;
             setScore(EscapeRoom.score);
             scoreMsg = "-10 from not disarming a trap";
-            repaint();
             // Remove the trap
             currentTrap.setSize(0, 0);
+            // clear tint and state
+            trapTint = false;
             repaint();
             onTrap = false;
             currentTrap = null;
@@ -417,13 +468,7 @@ public class GameGUI extends JComponent
     playerLoc.setLocation(x, y);
     repaint();
 
-    // Check for win condition: top right corner
-    if (x > WIDTH - 2*SPACE_SIZE && y == START_LOC_Y && !gameWon) {
-        gameWon = true;
-        scoreMsg = "You win! Final score: " + EscapeRoom.score;
-        repaint();
-        // Do NOT show JOptionPane here!
-    }
+  // (win condition is now when player moves off the right edge without a blocking wall)
     return 0;   
   }
 
@@ -637,20 +682,7 @@ public class GameGUI extends JComponent
   g2.drawString("Score: " + guiScore, 10, 12);
   g2.setColor(Color.MAGENTA);
   g2.drawString(scoreMsg, 100, 12); // Draw message next to score
-
-  // draw win message overlay if game is won
-  if (gameWon) {
-    // Draw a dark, semi-transparent rectangle over the whole component
-    g2.setColor(new Color(0, 0, 0, 220)); // More opaque for a darker overlay
-    g2.fillRect(0, 0, getWidth(), getHeight());
-
-    g2.setColor(Color.YELLOW);
-    g2.setFont(g2.getFont().deriveFont(Font.BOLD, 28f));
-    g2.drawString("Congratulations! You win!", 80, 140);
-    g2.setFont(g2.getFont().deriveFont(Font.PLAIN, 22f));
-    g2.drawString("Final score: " + EscapeRoom.score, 80, 180);
-    g2.drawString("Press 'R' to restart or 'Q' to quit.", 80, 220);
-  }
+  
 
   // draw walls
   g2.setColor(Color.BLACK);
@@ -672,6 +704,27 @@ public class GameGUI extends JComponent
   // draw player
   if (player != null) {
     g2.drawImage(player, x, y, this);
+  }
+
+  // draw red tint when standing on a trap
+  if (trapTint) {
+    g2.setColor(new Color(255, 0, 0, 80)); // translucent red
+    g2.fillRect(0, 0, getWidth(), getHeight());
+  }
+
+  // draw win message overlay if game is won (draw last so it overlays walls/player)
+  if (gameWon) {
+    // Draw a dark, semi-transparent rectangle over the whole component
+    g2.setColor(new Color(0, 0, 0, 220)); // More opaque for a darker overlay
+    g2.fillRect(0, 0, getWidth(), getHeight());
+
+    g2.setColor(Color.YELLOW);
+    // use a larger font for visibility
+    g2.setFont(g2.getFont().deriveFont(Font.BOLD, 28f));
+    g2.drawString("Congratulations! You win!", 80, 140);
+    g2.setFont(g2.getFont().deriveFont(Font.PLAIN, 22f));
+    g2.drawString("Final score: " + EscapeRoom.score, 80, 180);
+    g2.drawString("Press 'R' to restart or 'Q' to quit.", 80, 220);
   }
 }
 
@@ -754,8 +807,12 @@ public class GameGUI extends JComponent
   {
     String msg = " - Use the arrow keys to navigate through the gate\n"
                + " - Getting a coin increases the score\n"
+                + " - Jump over squares by pressing the spacebar (after moving in a direction with an arrow key, doesn't jump over walls)\n"
                + " - Running into walls or going off the grid decreases the score\n"
-               + "  - Landmines are placed in random unknown places in the grid, and running over them ends the attempt\n"
+               + "  - Landmines are placed in random unknown places in the grid, and running over them reduces the score\n"
+               + "  - Defuse/Spring Traps by typing 'd' to increase the score and avoid the trap within 2 seconds\n"
+                + "  - The screen turns red when a trap is about to be triggered\n"
+                + "  - Go off the grid on the right side to end the game\n"
                + " - Type 'r' to restart the game\n"
                + "  - Type 'q' to quit the game";
     JOptionPane.showMessageDialog(this, msg, "Info", JOptionPane.INFORMATION_MESSAGE);
